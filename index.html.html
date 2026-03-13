@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Finnish Cottage Summer Games – Tikka v0.4.3</title>
+<style>
+  :root { color-scheme: dark light; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b1020; color: #e5e7eb; min-height: 100vh; }
+  .wrap { position: relative; margin: 0 auto; padding: 16px; width: min(95vw, 1020px); }
+  h1 { margin: 0 0 8px 0; font-weight: 700; font-size: clamp(18px, 2.6vw, 26px); letter-spacing: .2px; }
+  .hud { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+  .stats { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: clamp(12px,1.8vw,14px); opacity:.95; }
+  .badge { padding: 6px 10px; border: 1px solid #334155; background: rgba(15,23,42,.5); border-radius: 12px; }
+  .controls { opacity:.85; font-size: clamp(12px,1.8vw,14px); }
+  canvas { width: 100%; height: auto; display: block; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 60px rgba(0,0,0,.2); background: radial-gradient(1200px 700px at 50% 10%, #1f2937 0%, #0f172a 60%, #0b1020 100%);} 
+  .footer { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; opacity:.9; font-size:clamp(12px,1.8vw,14px); margin-top:8px; }
+  button { background:#0ea5e9; color:#fff; border:none; padding:10px 14px; border-radius:12px; font-weight:600; box-shadow:0 6px 16px rgba(14,165,233,.35); cursor:pointer; }
+  button:hover { filter:brightness(1.05); }
+  button.secondary { background:#334155; box-shadow:none; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .error { color:#fecaca; font-weight:600; }
+
+  /* --- Overlay Start Menu (modal above canvas) --- */
+  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .overlay.hidden { display:none; }
+  .scrim { position:absolute; inset:0; background: rgba(2,6,23,.65); backdrop-filter: blur(2px); border-radius:16px; }
+  .panel { position:relative; width:min(680px, 92%); border:1px solid #334155; background:rgba(11,17,33,.92); border-radius:16px; padding:18px; box-shadow:0 25px 60px rgba(0,0,0,.45); }
+  .menu { display:grid; gap:12px; }
+  .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .label { width: 160px; opacity:.85; font-weight:600; }
+  .group { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input[type="text"]{ padding:8px 10px; border-radius:10px; border:1px solid #475569; background:#0b1224; color:#e5e7eb; }
+  .colorchip{ width:14px; height:14px; border-radius:50%; display:inline-block; margin-left:6px; box-shadow:0 0 0 2px rgba(0,0,0,.3) inset; }
+
+  .scoreboard { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  .pbadge { padding:6px 10px; border-radius:12px; background:rgba(15,23,42,.5); border:1px solid #334155; }
+  .pname { font-weight:700; }
+  .target { opacity:.85; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Finnish Cottage Summer Games – Tikka <span style="opacity:.65;font-weight:500;">v0.4.3</span></h1>
+
+    <!-- HUD during game -->
+    <div class="hud">
+      <div class="stats">
+        <div class="badge">Heitot: <span id="throws">0</span>/5</div>
+        <div class="badge">Pisteet: <span id="score">0</span></div>
+        <div class="badge">Viime heitto: <span id="last">–</span></div>
+      </div>
+      <div class="controls" id="controlsHint">Ohjaus: <strong>klikkaa</strong> tai paina <strong>välilyönti</strong> heittääksesi</div>
+    </div>
+
+    <!-- Scoreboard for players -->
+    <div id="playersBar" class="scoreboard"></div>
+
+    <div style="position:relative">
+      <canvas id="game" width="1000" height="650" aria-label="Tikkapeli"></canvas>
+
+      <!-- Overlayed Start Menu on top of canvas -->
+      <div id="menuOverlay" class="overlay">
+        <div class="scrim"></div>
+        <div id="menuPanel" class="panel menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+          <div class="row" style="justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div id="menuTitle" style="font-weight:800; font-size:20px; margin-bottom:6px;">Valitse pelitila</div>
+              <div style="opacity:.75; font-size:14px;">Aseta pelitila ja vastustaja ennen aloittamista.</div>
+            </div>
+            <button id="startBtn">Aloita peli</button>
+          </div>
+          <hr style="border:0; border-top:1px solid #334155; opacity:.7; margin:10px 0;"/>
+          <div class="row"><div class="label">Pelitila</div>
+            <div class="group">
+              <label><input type="radio" name="mode" value="normal" checked> Normaali</label>
+              <label><input type="radio" name="mode" value="oneToTen"> Ykkösestä kymppiin</label>
+            </div>
+          </div>
+          <div class="row"><div class="label">Vastustaja</div>
+            <div class="group">
+              <label><input type="radio" name="opponent" value="human" checked> Toinen pelaaja</label>
+              <label><input type="radio" name="opponent" value="cpu"> Tietokone</label>
+            </div>
+          </div>
+          <div class="row"><div class="label">Pelaajat</div>
+            <div class="group">
+              <label>P1&nbsp;nimi <input id="p1name" type="text" value="Pelaaja 1"></label><span class="colorchip" style="background:#ef4444"></span>
+              <label>P2&nbsp;nimi <input id="p2name" type="text" value="Pelaaja 2"></label><span class="colorchip" style="background:#60a5fa"></span>
+            </div>
+          </div>
+          <div class="row"><div class="label">Ohje</div>
+            <div class="group" style="opacity:.9;">
+              Heitä <strong>klikkaamalla</strong> tai <strong>välilyönnillä</strong>. 5 tikkaa / vuoro. Tuuli vaikuttaa joka heittoon.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div id="help">Valitse pelitila valikosta ja aloita peli.</div>
+      <div>
+        <button id="backBtn" class="secondary" hidden>Takaisin valikkoon</button>
+        <button id="restartBtn" hidden>Uusi peli</button>
+      </div>
+    </div>
+
+    <div id="err" class="error" role="alert"></div>
+  </div>
+
+<script>
+(function(){
+  function reportErr(msg, e) { try { var el = document.getElementById('err'); if (el) el.textContent = (msg||'Virhe') + (e? ' – ' + (e.message||e):''); console.error(msg,e);} catch(_){} }
+
+  try {
+    var canvas = document.getElementById('game');
+    var ctx = canvas.getContext('2d');
+    if (!ctx) { reportErr('Canvas 2D -kontekstia ei saatu'); return; }
+
+    var W = canvas.width, H = canvas.height;
+
+    var ui = {
+      throws: document.getElementById('throws'),
+      score:  document.getElementById('score'),
+      last:   document.getElementById('last'),
+      restartBtn: document.getElementById('restartBtn'),
+      backBtn: document.getElementById('backBtn'),
+      help:   document.getElementById('help'),
+      playersBar: document.getElementById('playersBar'),
+      startBtn: document.getElementById('startBtn'),
+      menuOverlay: document.getElementById('menuOverlay')
+    };
+
+    // Menu inputs
+    var p1nameEl = document.getElementById('p1name');
+    var p2nameEl = document.getElementById('p2name');
+    function readRadio(name){ var nodes=document.getElementsByName(name); for (var i=0;i<nodes.length;i++){ if(nodes[i].checked) return nodes[i].value; } return null; }
+
+    // Board
+    var board = { cx: W * 0.62, cy: H * 0.52, R: Math.min(W*0.78, H*0.88) * 0.46 };
+
+    // Difficulty per throw
+    var difficulty = [
+      { aimSpeed: 1.00, noisePx: 3,  windMax: 2 },
+      { aimSpeed: 1.15, noisePx: 5,  windMax: 3 },
+      { aimSpeed: 1.35, noisePx: 7,  windMax: 4 },
+      { aimSpeed: 1.60, noisePx: 9,  windMax: 5 },
+      { aimSpeed: 1.90, noisePx: 12, windMax: 6 }
+    ];
+    var WIND_PX_PER_MS = 6;
+
+    // State
+    var state = {
+      screen: 'menu',
+      mode: 'normal',
+      opponent: 'human',
+      players: [],
+      current: 0,
+      throwsThisTurn: 0,
+      throwing: false,
+      throwIndex: 0,
+      darts: [],
+      wind: { angle: 0, speed: 0 },
+      aimTime: 0,
+      winMessage: ''
+    };
+
+    var COLORS = [ { base:'#ef4444' }, { base:'#60a5fa' }, { base:'#22c55e' } ];
+
+    var lastTime = performance.now();
+
+    function randNorm(mu,sigma){ mu=(typeof mu==='number')?mu:0; sigma=(typeof sigma==='number')?sigma:1; var u=1-Math.random(), v=1-Math.random(); var z=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); return z*sigma+mu; }
+    function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi,v)); }
+    function dist(x1,y1,x2,y2){ var dx=x2-x1, dy=y2-y1; return Math.sqrt(dx*dx+dy*dy); }
+    function degToRad(d){ return d*Math.PI/180; }
+    function lerp(a,b,t){ return a+(b-a)*t; }
+    function bezier2(p0,p1,p2,t){ var u=1-t; return { x:u*u*p0.x+2*u*t*p1.x+t*t*p2.x, y:u*u*p0.y+2*u*t*p1.y+t*t*p2.y }; }
+    function bezier2Tangent(p0,p1,p2,t){ var u=1-t; return { x:2*u*(p1.x-p0.x)+2*t*(p2.x-p1.x), y:2*u*(p1.y-p0.y)+2*t*(p2.y-p1.y) }; }
+
+    // Scoring: bull=10, rings 9..1
+    var RINGS = 9, bullFrac = 0.06;
+    function scoreForPoint(x,y){ var r=dist(x,y,board.cx,board.cy), R=board.R; if(r>R) return 0; var bullR=R*bullFrac; if(r<=bullR) return 10; var ringWidth=(R-bullR)/RINGS; var i=Math.floor((r-bullR)/ringWidth)+1; i=clamp(i,1,RINGS); return 10 - i; }
+
+    function rollWind(){ var d=difficulty[Math.min(state.throwIndex, difficulty.length-1)]; var speed=clamp(Math.random()*d.windMax+randNorm(0,0.4),0,d.windMax); var angleDeg=Math.random()*360; state.wind={angle:degToRad(angleDeg), speed:speed}; }
+    function getAimPos(t){ var d=difficulty[Math.min(state.throwIndex, difficulty.length-1)]; var s=t*1.3*d.aimSpeed; var ax=board.cx+Math.sin(s)*board.R*0.82; var ay=board.cy+Math.cos(s*0.7)*board.R*0.82; var jitter=1.1; return {x:ax+randNorm(0,jitter), y:ay+randNorm(0,jitter)}; }
+    function currentPlayer(){ return state.players[state.current]; }
+
+    // Dart draw (from earlier versions)
+    function drawDartSprite(x, y, angleRad, colorHex){ ctx.save(); ctx.translate(x,y); ctx.rotate(angleRad); var L=Math.max(48, Math.min(72, board.R*0.22))*1.30; var pointL=L*0.18, ferruleL=L*0.08, barrelL=L*0.28, stemL=L*0.28, flightL=L*0.28; var barrelW=Math.max(6,L*0.20), stemWBase=Math.max(3,L*0.13), stemWTip=Math.max(2,L*0.08); var x0=0, x1=x0-pointL, x2=x1-ferruleL, x3=x2-barrelL, x4=x3-stemL, x5=x4-flightL; var tipGrad=ctx.createLinearGradient(x0,0,x1,0); tipGrad.addColorStop(0,'#d9dbe1'); tipGrad.addColorStop(1,'#7b7f86'); ctx.fillStyle=tipGrad; ctx.strokeStyle='#111827'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(x0,0); ctx.lineTo(x1,-barrelW*0.08); ctx.lineTo(x1,barrelW*0.08); ctx.closePath(); ctx.fill(); ctx.stroke(); var ferruleGrad=ctx.createLinearGradient(x1,0,x2,0); ferruleGrad.addColorStop(0,'#cfd4db'); ferruleGrad.addColorStop(1,'#9aa0a8'); ctx.fillStyle=ferruleGrad; ctx.strokeStyle='#1f2937'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(x1,-barrelW*0.22); ctx.lineTo(x2,-barrelW*0.30); ctx.lineTo(x2,barrelW*0.30); ctx.lineTo(x1,barrelW*0.22); ctx.closePath(); ctx.fill(); ctx.stroke(); var r=barrelW/2; var barrelGrad=ctx.createLinearGradient(x2,0,x3,0); barrelGrad.addColorStop(0,'#b9bec6'); barrelGrad.addColorStop(0.5,'#e5e7eb'); barrelGrad.addColorStop(1,'#9aa0a8'); ctx.fillStyle=barrelGrad; ctx.beginPath(); ctx.moveTo(x2,-r); ctx.lineTo(x3,-r); ctx.quadraticCurveTo(x3-3,-r,x3-3,0); ctx.lineTo(x3,r); ctx.lineTo(x2,r); ctx.quadraticCurveTo(x2+3,r,x2+3,0); ctx.closePath(); ctx.fill(); ctx.save(); ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.7; var step=Math.max(3,barrelW*0.17); for (var xx=x3; xx<=x2; xx+=step){ ctx.beginPath(); ctx.moveTo(xx,-r); ctx.lineTo(xx+6,r); ctx.stroke(); } for (var xx2=x2; xx2>=x3; xx2-=step){ ctx.beginPath(); ctx.moveTo(xx2,-r); ctx.lineTo(xx2-6,r); ctx.stroke(); } ctx.restore(); var c1=colorHex, c2=shadeColor(colorHex,-20); var stemGrad=ctx.createLinearGradient(x3,0,x4,0); stemGrad.addColorStop(0,lightenColor(c1,25)); stemGrad.addColorStop(1,c2); ctx.fillStyle=stemGrad; ctx.beginPath(); ctx.moveTo(x3,-stemWBase/2); ctx.lineTo(x4,-stemWTip/2); ctx.lineTo(x4,stemWTip/2); ctx.lineTo(x3,stemWBase/2); ctx.closePath(); ctx.fill(); var cxF=x5+flightL*0.55; var flightGrad=ctx.createRadialGradient(cxF,0,1,cxF,0,flightL); flightGrad.addColorStop(0,lightenColor(c1,20)); flightGrad.addColorStop(0.6,c1); flightGrad.addColorStop(1,shadeColor(c1,-25)); ctx.fillStyle=flightGrad; ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(x4,0); ctx.bezierCurveTo(x4 - flightL*0.38, -stemWTip*1.9, x5 + flightL*0.18, -flightL*1.00, x5, -flightL*0.20); ctx.bezierCurveTo(x5 + flightL*0.18, flightL*1.00, x4 - flightL*0.38, stemWTip*1.9, x4, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo((x4+x5)/2, -flightL*0.85); ctx.lineTo((x4+x5)/2, flightL*0.85); ctx.stroke(); ctx.restore(); ctx.restore(); ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+
+    function shadeColor(hex, pct){ var c=parseInt(hex.slice(1),16); var r=(c>>16)&255, g=(c>>8)&255, b=c&255; r=Math.max(0,Math.min(255,Math.floor(r*(100+pct)/100))); g=Math.max(0,Math.min(255,Math.floor(g*(100+pct)/100))); b=Math.max(0,Math.min(255,Math.floor(b*(100+pct)/100))); return '#'+(0x1000000+(r<<16)+(g<<8)+b).toString(16).slice(1); }
+    function lightenColor(hex, pct){ return shadeColor(hex, pct); }
+
+    function drawBoard(){ var cx=board.cx, cy=board.cy, R=board.R; var grad=ctx.createRadialGradient(cx,cy,R*0.1,cx,cy,R*1.05); grad.addColorStop(0,'#0b1530'); grad.addColorStop(1,'#030711'); ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(cx,cy,R*1.1,0,Math.PI*2); ctx.fill(); ctx.save(); ctx.shadowColor='rgba(0,0,0,0.55)'; ctx.shadowBlur=16; var bullR=R*bullFrac; var ringWidth=(R-bullR)/RINGS; for (var i=RINGS;i>=1;i--){ var r=bullR+i*ringWidth; var color=(i%2===1)?'#121417':'#e8ebf0'; ctx.beginPath(); ctx.fillStyle=color; ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill(); } ctx.beginPath(); ctx.fillStyle='#c62828'; ctx.arc(cx,cy,bullR*0.62,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.lineWidth=2; ctx.strokeStyle='#0b0d10'; ctx.arc(cx,cy,bullR,0,Math.PI*2); ctx.stroke(); ctx.beginPath(); ctx.lineWidth=3; ctx.strokeStyle='#0b0d10'; ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke(); ctx.restore(); drawAxisNumbers(cx,cy,R,bullR,ringWidth); }
+
+    function drawAxisNumbers(cx,cy,R,bullR,ringWidth){ function drawText(x,y,text,fill,size,shadow){ ctx.save(); ctx.font='700 '+(size||16)+'px ui-sans-serif, system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=3; ctx.strokeStyle=shadow; if(shadow){ ctx.strokeText(text,x,y);} ctx.fillStyle=fill; ctx.fillText(text,x,y); ctx.restore(); } for (var k=1;k<=RINGS;k++){ var rMid=bullR+(k-0.5)*ringWidth; var isDark=(k%2===1); var fill=isDark?'#ffffff':'#111111'; var shadow=isDark?'rgba(0,0,0,0.45)':'rgba(255,255,255,0.45)'; drawText(cx - rMid, cy, String(10 - k), fill, 16, shadow); drawText(cx + rMid, cy, String(10 - k), fill, 16, shadow); drawText(cx, cy - rMid, String(10 - k), fill, 16, shadow); drawText(cx, cy + rMid, String(10 - k), fill, 16, shadow); } }
+
+    function drawTargetBadge(){ if (state.screen!=='game' || state.mode!=='oneToTen') return; var p=currentPlayer(); var x=board.cx - board.R - 80; var y=board.cy - 10; var w=120, h=80; ctx.save(); ctx.fillStyle='rgba(15,23,42,0.7)'; ctx.strokeStyle='rgba(148,163,184,0.45)'; ctx.lineWidth=1.2; roundRect(ctx, x-w, y-h/2, w, h, 12, true, true); ctx.fillStyle='rgba(226,232,240,0.9)'; ctx.font='700 14px ui-sans-serif, system-ui'; ctx.fillText('Seuraava', x-w+14, y-h/2+20); var Rchip=22; ctx.beginPath(); ctx.fillStyle=p.color; ctx.arc(x-w+20+Rchip, y+8, Rchip, 0, Math.PI*2); ctx.fill(); ctx.fillStyle='white'; ctx.font='800 18px ui-sans-serif, system-ui'; var txt=(p.currentTarget<=10? String(p.currentTarget):'10'); var tw=ctx.measureText(txt).width; ctx.fillText(txt, x-w+20+Rchip - tw/2, y+14); ctx.restore(); }
+
+    function roundRect(ctx, x, y, w, h, r, fill, stroke){ if (typeof r === 'number'){ r={tl:r,tr:r,br:r,bl:r}; } ctx.beginPath(); ctx.moveTo(x+r.tl, y); ctx.lineTo(x+w-r.tr, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r.tr); ctx.lineTo(x+w, y+h-r.br); ctx.quadraticCurveTo(x+w, y+h, x+w-r.br, y+h); ctx.lineTo(x+r.bl, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r.bl); ctx.lineTo(x, y+r.tl); ctx.quadraticCurveTo(x, y, x+r.tl, y); if (fill) ctx.fill(); if (stroke) ctx.stroke(); }
+
+    function drawDarts(){ for (var i=0;i<state.darts.length;i++){ var d=state.darts[i]; var col=state.players[d.player].color; drawDartSprite(d.x, d.y, d.ang, col); } }
+
+    function drawAim(pos){ if (state.throwing || state.screen!=='game') return; var x=pos.x, y=pos.y; ctx.save(); ctx.globalAlpha=0.9; ctx.strokeStyle='#38bdf8'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x-18,y); ctx.lineTo(x-6,y); ctx.moveTo(x+6,y); ctx.lineTo(x+18,y); ctx.moveTo(x,y-18); ctx.lineTo(x,y-6); ctx.moveTo(x,y+6); ctx.lineTo(x,y+18); ctx.stroke(); ctx.fillStyle='#38bdf8'; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha=0.4; ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI*2); ctx.stroke(); ctx.restore(); }
+
+    function drawWindMeter(){ var angle=state.wind.angle, speed=state.wind.speed; var x=W*0.15, y=H*0.80, radius=50; ctx.save(); ctx.beginPath(); ctx.fillStyle='rgba(15,23,42,0.6)'; ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1.2; ctx.arc(x,y,radius+10,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,0.08)'; var rr=[radius, radius*0.66, radius*0.33]; for(var i=0;i<rr.length;i++){ ctx.beginPath(); ctx.arc(x,y,rr[i],0,Math.PI*2); ctx.stroke(); } var len=clamp(speed/6,0,1)*radius; var nx=x+Math.cos(angle)*len; var ny=y+Math.sin(angle)*len; ctx.strokeStyle='#fbbf24'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(nx,ny); ctx.stroke(); ctx.save(); ctx.translate(nx,ny); ctx.rotate(angle); ctx.fillStyle='#fbbf24'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-10,-6); ctx.lineTo(-10,6); ctx.closePath(); ctx.fill(); ctx.restore(); ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font='600 13px ui-sans-serif, system-ui'; ctx.fillText('Tuuli', x-18, y - radius - 18); ctx.font='500 12px ui-sans-serif, system-ui'; ctx.fillText(speed.toFixed(1)+' m/s', x-26, y + radius + 16); ctx.restore(); }
+
+    function render(flying, showFlight){ ctx.clearRect(0,0,W,H); drawBoard(); drawDarts(); if (flying && showFlight){ drawDartSprite(flying.pos.x, flying.pos.y, flying.ang, currentPlayer().color); } else { drawAim(getAimPos(state.aimTime)); } drawWindMeter(); drawTargetBadge(); if (state.screen==='over'){ ctx.save(); ctx.globalAlpha=0.1; ctx.fillStyle='black'; ctx.fillRect(0,0,W,H); ctx.restore(); ctx.save(); ctx.fillStyle='white'; ctx.font='700 28px ui-sans-serif, system-ui'; var msg=state.winMessage||'Peli päättyi'; var tw=ctx.measureText(msg).width; ctx.fillText(msg, (W-tw)/2, H*0.12); ctx.restore(); } }
+
+    function loop(now){ var dt=(now - lastTime)/1000; lastTime=now; if(state.screen==='game' && !state.throwing){ state.aimTime += dt; } render(); requestAnimationFrame(loop); }
+
+    // --- Players & menu flow ---
+    function setupPlayers(){ state.players=[]; var p1={ name:(p1nameEl.value||'Pelaaja 1'), color: COLORS[0].base, type:'HUMAN', score:0, currentTarget:1, turns:0, turnBase:1, turnHits:new Set() }; var opp=readRadio('opponent'); var p2name=(opp==='cpu')?'CPU':(p2nameEl.value||'Pelaaja 2'); var p2type=(opp==='cpu')?'CPU':'HUMAN'; var p2color=(opp==='cpu')?COLORS[2].base:COLORS[1].base; var p2={ name:p2name, color:p2color, type:p2type, score:0, currentTarget:1, turns:0, turnBase:1, turnHits:new Set() }; state.players.push(p1,p2); updatePlayersBar(); }
+
+    function updatePlayersBar(){ var el=ui.playersBar; el.innerHTML=''; for (var i=0;i<state.players.length;i++){ var p=state.players[i]; var wrap=document.createElement('div'); wrap.className='pbadge'; wrap.style.borderColor=(i===state.current? p.color : '#334155'); var clr='<span class="colorchip" style="background:'+p.color+';vertical-align:-2px;"></span>'; var inner='<span class="pname">'+p.name+'</span> '+clr+' · Pisteet: <strong>'+p.score+'</strong>'; if (state.mode==='oneToTen') inner += ' · <span class="target">Tavoite: <strong>'+ (p.currentTarget<=10? p.currentTarget : '10✓') +'</strong></span>'; if (i===state.current) inner += ' · <em>vuoro</em>'; wrap.innerHTML=inner; el.appendChild(wrap); } }
+
+    function startFromMenu(){ state.mode=readRadio('mode')||'normal'; state.opponent=readRadio('opponent')||'human'; setupPlayers(); state.screen='game'; state.current=0; state.throwsThisTurn=0; state.throwIndex=0; state.throwing=false; state.darts=[]; state.wind={angle:0,speed:0}; state.aimTime=0; state.winMessage=''; var cp=currentPlayer(); cp.turnBase=cp.currentTarget; cp.turnHits=new Set(); rollWind(); ui.menuOverlay.classList.add('hidden'); ui.backBtn.hidden=false; ui.restartBtn.hidden=true; ui.help.textContent=(state.mode==='normal')? 'Normaali: 5 tikkaa / pelaaja. Suurimmat pisteet voittaa.' : '1→10: voit täyttää puuttuvia numeroita saman vuoron aikana; 5 tikkaa / vuoro, tikat poistetaan vuoron lopussa.'; ui.throws.textContent=state.throwsThisTurn; ui.score.textContent=0; ui.last.textContent='–'; updatePlayersBar(); if (currentPlayer().type==='CPU') scheduleCpuThrow(); }
+
+    function backToMenu(){ state.screen='menu'; ui.menuOverlay.classList.remove('hidden'); ui.backBtn.hidden=true; ui.restartBtn.hidden=true; ui.help.textContent='Valitse pelitila valikosta ja aloita peli.'; }
+
+    function endGame(winText){ state.screen='over'; state.winMessage=winText; ui.restartBtn.hidden=false; }
+    function nextPlayer(){ state.current=(state.current+1)%state.players.length; state.throwsThisTurn=0; state.throwIndex=0; var cp=currentPlayer(); cp.turnBase=cp.currentTarget; cp.turnHits=new Set(); updatePlayersBar(); if (currentPlayer().type==='CPU') scheduleCpuThrow(); }
+    function clearDartsOfPlayer(idx){ state.darts = state.darts.filter(function(d){ return d.player !== idx; }); }
+
+    // THROW
+    function throwDart(){ if (state.throwing || state.screen!=='game') return; if (state.throwsThisTurn >= 5) return; rollWind(); var aim=getAimPos(state.aimTime); var d=difficulty[Math.min(state.throwIndex, difficulty.length-1)]; var wind=state.wind; var windDriftPx=wind.speed*WIND_PX_PER_MS; var wx=Math.cos(wind.angle)*windDriftPx, wy=Math.sin(wind.angle)*windDriftPx; var nx=randNorm(0,d.noisePx), ny=randNorm(0,d.noisePx); var hit={ x: aim.x+wx+nx, y: aim.y+wy+ny }; var toCenter=Math.atan2(hit.y - board.cy, hit.x - board.cx); var rHit=Math.min(dist(hit.x, hit.y, board.cx, board.cy), board.R*1.05); hit.x=board.cx + Math.cos(toCenter)*rHit; hit.y=board.cy + Math.sin(toCenter)*rHit; var points=scoreForPoint(hit.x, hit.y); var start={ x: board.cx, y: board.cy + board.R + 70 }; var ctrl={ x: lerp(start.x, hit.x, 0.5) + wx*0.4, y: lerp(start.y, hit.y, 0.5) + wy*0.15 - 40 }; state.throwing=true; var t0=performance.now(), flightMs=460; function flight(){ var now=performance.now(); var t=clamp((now-t0)/flightMs,0,1); var te=t*t*(3-2*t); var p=bezier2(start,ctrl,hit,te); var tan=bezier2Tangent(start,ctrl,hit,te); var ang=Math.atan2(tan.y,tan.x); render({pos:p, ang:ang}, true); if (t<1){ requestAnimationFrame(flight);} else { finalizeThrow(hit, points, Math.atan2(hit.y-ctrl.y, hit.x-ctrl.x)); } } requestAnimationFrame(flight); }
+
+    function recomputeSequentialTarget(p){ var t=p.turnBase; while (t<=10 && p.turnHits.has(t)) t++; if (t>p.currentTarget) p.currentTarget=t; }
+
+    function finalizeThrow(hit, points, ang){ var idx=state.current; var p=state.players[idx]; state.darts.push({ x: hit.x, y: hit.y, ang: ang, score: points, player: idx }); if (state.mode==='normal'){ p.score += points; } else if (state.mode==='oneToTen'){ if (!p.turnHits) p.turnHits=new Set(); if (points>=1 && points<=10) p.turnHits.add(points); recomputeSequentialTarget(p); if (p.currentTarget>10){ endGame('Voittaja: '+p.name+' (saavutti 10)'); ui.last.textContent=points; ui.score.textContent=p.score; updatePlayersBar(); state.throwing=false; return; } } state.throwsThisTurn++; state.throwIndex++; ui.throws.textContent=state.throwsThisTurn; ui.score.textContent=p.score; ui.last.textContent=points; state.throwing=false; if (state.throwsThisTurn >= 5){ p.turns=(p.turns||0)+1; if (state.mode==='normal'){ var other=state.players[(state.current+1)%2]; if ((other.turns||0) === p.turns){ if (state.players[0].score > state.players[1].score) endGame('Voittaja: '+state.players[0].name+' ('+state.players[0].score+' vs '+state.players[1].score+')'); else if (state.players[1].score > state.players[0].score) endGame('Voittaja: '+state.players[1].name+' ('+state.players[1].score+' vs '+state.players[0].score+')'); else endGame('Tasapeli! ('+state.players[0].score+' - '+state.players[1].score+')'); updatePlayersBar(); return; } } else if (state.mode==='oneToTen'){ clearDartsOfPlayer(idx); } nextPlayer(); } else { updatePlayersBar(); if (currentPlayer().type==='CPU') scheduleCpuThrow(); } }
+
+    function scheduleCpuThrow(){ setTimeout(function(){ if (state.screen!=='game' || state.throwing) { scheduleCpuThrow(); return; } if (state.mode==='oneToTen'){ state.aimTime += Math.random()*0.5; } throwDart(); }, 650 + Math.random()*450); }
+
+    function onThrowInput(e){ if(state.screen==='game' && !state.throwing && currentPlayer().type==='HUMAN'){ if(e && e.preventDefault) e.preventDefault(); throwDart(); } }
+    canvas.addEventListener('click', onThrowInput, false);
+    window.addEventListener('keydown', function(e){ if (e && (e.code==='Space' || e.key===' ')) { if(e.preventDefault) e.preventDefault(); onThrowInput(e); } }, false);
+    canvas.addEventListener('touchstart', onThrowInput, { passive:false });
+
+    ui.startBtn.addEventListener('click', startFromMenu, false);
+    ui.backBtn.addEventListener('click', backToMenu, false);
+
+    // Start with overlay visible
+    ui.playersBar.innerHTML='';
+    ui.menuOverlay.classList.remove('hidden');
+    ui.throws.textContent='0'; ui.score.textContent='0'; ui.last.textContent='–';
+    render(); requestAnimationFrame(function(t){ lastTime=t; loop(t); });
+
+  } catch(e) { reportErr('Sovellus kaatui käynnistyksessä', e); }
+})();
+</script>
+</body>
+</html>
